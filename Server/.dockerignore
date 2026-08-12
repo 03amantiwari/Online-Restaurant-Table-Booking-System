@@ -1,0 +1,42 @@
+
+Dockerignore backend · TXT
+# Keep the Docker build context small and fast.
+# Anything here is NOT sent to the Docker daemon during build.
+ 
+# Build output — the image builds its own target/ inside stage 1
+target/
+ 
+# Logs
+logs/
+*.log
+ 
+# Secrets — must never leak into the image
+.env
+.env.*
+*.pem
+*.key
+application-local.properties
+application-secret.properties
+ 
+# IDE / editor
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+.vscode/
+bin/
+ 
+# Git & docs
+.git/
+.gitignore
+*.md
+ 
+# OS junk
+.DS_Store
+Thumbs.db
+ 
+# The Dockerfile itself doesn't need to be in the context
+Dockerfile
+.dockerignore
+ 
