@@ -1,0 +1,91 @@
+# =========================================================================
+#  docker-compose.yml  —  environment-independent, Jenkins-ready
+#
+#  This file hardcodes NOTHING. Every value comes from the environment:
+#    - Locally  : a `.env` file in this same folder (compose reads it auto).
+#    - In Jenkins: env vars injected by the pipeline (compose reads those too;
+#                  shell env takes precedence over .env — so no file needed).
+#
+#  Because of that, the SAME file works in local test AND CI without edits.
+#
+#  Commands:
+#    docker compose up --build      # build + run everything
+#    docker compose build           # build images only (Jenkins step)
+#    docker compose down            # stop + remove
+#    docker compose down -v         # also wipe the DB volume
+# =========================================================================
+
+services:
+
+  # Database
+  mysql:
+    image: mysql:8.0
+    container_name: easyseat-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}     # single source of truth for DB name
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - easyseat-net
+
+  # Server
+  backend:
+    # image tag is parameterised so Jenkins can push/pull by version.
+    image: ${BACKEND_IMAGE:-easyseat-backend:local}
+    build: ./Server
+    container_name: easyseat-backend
+    ports:
+      - "8082:8082"
+    environment:
+
+      DB_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}  
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+      DB_DRIVER: com.mysql.cj.jdbc.Driver
+      CONTEXT_PATH: ${CONTEXT_PATH}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXP_TIME: ${JWT_EXP_TIME}
+      CORS_ALLOW_URL: ${CORS_ALLOW_URL}
+
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${DDL_AUTO:-none}
+
+      SPRING_JPA_DEFER_DATASOURCE_INITIALIZATION: "true"
+
+      SPRING_SQL_INIT_MODE: ${SQL_INIT_MODE:-always}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - easyseat-net
+
+  # Client
+  frontend:
+    image: ${FRONTEND_IMAGE:-easyseat-frontend:local}
+    build:
+      context: ./Client
+      args:
+        VITE_API_URL: ${VITE_API_URL}  
+    container_name: easyseat-frontend
+    ports:
+      - "5173:80"                        
+    depends_on:
+      - backend
+    networks:
+      - easyseat-net
+
+networks:
+  easyseat-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
